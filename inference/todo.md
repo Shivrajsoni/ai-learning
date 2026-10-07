@@ -1,0 +1,5 @@
+- [] Implement KV Cache 
+- [] Implement Batch Processing 
+- [] SWIGLUMLP Logic in Depth why two and what's the benifit for having it 
+- [] Advance Practices in the Inference like Optimization techiniques 
+- [] Deployment techniques , suppose if i want to run a model on a serverless linux machine , how we can implement it , how we can run it ? 

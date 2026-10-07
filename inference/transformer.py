@@ -19,6 +19,7 @@ class SwiGLUMLP(nn.Module):
         return self.down_proj(gate * up)
 
 
+
 # Complete Individual Block 
     # In["Input Tensor x: [B, T, 2048]"] --> Norm1["input_layernorm (RMSNorm)"]
     # Norm1 --> Attn["Attention (Q, K, V, RoPE, O)"]
