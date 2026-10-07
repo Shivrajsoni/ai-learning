@@ -57,14 +57,15 @@ def rotate_half(x):
     return torch.cat((-x2,x1) , dim=-1)
 
 
-def apply_rope(x,cos,sin):
+def apply_rope(x,cos,sin,start_pos = 0):
     # x : (B, H, T, D)  cos/sin : (max_seq_len , D / 2 )
     T = x.size(2)
-    cos = cos[:T][None , None , : , :]  #[1,1,T,D/2]
-    sin = sin[:T][None , None , : , :]
+    cos_slice = cos[start_pos: start_pos + T][None , None , : , :]
+    sin_slice = sin[start_pos: start_pos + T ][None , None , : , :]
+    
 
-    cos = torch.cat([cos , cos] , dim=-1)
-    sin = torch.cat([sin , sin] , dim=-1) 
+    cos = torch.cat([cos_slice , cos_slice] , dim=-1)
+    sin = torch.cat([sin_slice , sin_slice] , dim=-1) 
     return (x * cos) + (rotate_half(x) * sin)
     
 
@@ -102,7 +103,7 @@ class GroupQueryAttention(nn.Module):
         self.register_buffer("sin",sin,persistent=False)
     
 
-    def forward(self , x):
+    def forward(self , x , start_pos = 0, cache = None):
         B , T , C = x.shape
 
         # Generates Q , K , V    
@@ -122,9 +123,16 @@ class GroupQueryAttention(nn.Module):
         V = V.transpose(1,2)
 
         # RoPE: rotate Q and K only
-        Q = apply_rope(Q, self.cos, self.sin)
-        K = apply_rope(K, self.cos, self.sin)
+        Q = apply_rope(Q, self.cos, self.sin,start_pos=start_pos)
+        K = apply_rope(K, self.cos, self.sin,start_pos=start_pos)
         
+        if cache is not None:
+            prev_k , prev_v = cache 
+            K = torch.cat([prev_k,K],dim=2)
+            V = torch.cat([prev_v,V],dim=2)
+        
+        new_cache = (K , V)
+
         K = repeat_kv(K,self.num_queries_per_kv)
         V = repeat_kv(V,self.num_queries_per_kv)
 
@@ -132,13 +140,13 @@ class GroupQueryAttention(nn.Module):
         scores = scores / math.sqrt(self.head_dim)
 
         # mask creation 
-        mask = torch.triu(
-            torch.ones(T , T , device=x.device),
-            diagonal=1 
-        ).bool()
-        
-        # mask implementation 
-        scores = scores.masked_fill(mask , float("-inf"))
+        if T > 1:
+            mask = torch.triu(
+                torch.ones(T , T , device=x.device),
+                diagonal=1 
+            ).bool()
+            # mask implementation 
+            scores = scores.masked_fill(mask , float("-inf"))
         
         # softmax implementation 
         attn = torch.softmax(scores , dim=-1)
@@ -151,6 +159,4 @@ class GroupQueryAttention(nn.Module):
         output = output.contiguous().view(B,T,self.d_model)
 
         # Final  Projection 
-        output = self.w_o(output)
-        
-        return output
+        return self.w_o(output) , new_cache

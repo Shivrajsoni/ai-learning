@@ -20,10 +20,12 @@ class Inference:
         input_ids = torch.tensor([tokens], dtype=torch.long) # [1,T]
 
         generated_tokens = []
+        
 
         with torch.no_grad():
-            for _ in range(max_new_tokens):
-                logits = self.model(input_ids) # [1 , T , 32000]
+            # Prefill = understand/process the prompt and build the initial KV cache.
+            # Prefill Phase : Process the Input Prompt 
+                logits , kv_caches = self.model(input_ids,start_pos=0,kv_caches = None) # [1 , T , 32000]
                 next_token_logits = logits[:,-1,:] # [1,32000]
                 
                 # Greedy Decoding : pick highest Prob token 
@@ -32,12 +34,31 @@ class Inference:
                 token_val = next_token_id.item()
 
                 if token_val == 2:
-                    break 
+                    return self.tokenizer.decode(generated_tokens)
+
                 generated_tokens.append(token_val)
 
-                input_ids = torch.cat([input_ids, next_token_id],dim=1)
+                start_pos = input_ids.shape[1] # start_pos is now len(1)
+
+                current_token = next_token_id                
+            
+            # Decode = generate new tokens one-by-one while reusing that cache.
+            # 2 Decode Phase : Autoregressive token-by-token generation with kv_cache 
+                for _ in range(max_new_tokens - 1):
+                    logits , kv_caches = self.model(current_token,start_pos=start_pos,kv_caches=kv_caches)
+                    next_token_id = torch.argmax(logits[:,-1,:],dim=-1,keepdim=True)
+
+                    token_val = next_token_id.item()
+
+                    if token_val == 2 : # EOS Token 
+                        break 
+
+                    generated_tokens.append(token_val)
+
+                    current_token = next_token_id
+                    start_pos+=1 
             
         
-        return self.tokenizer.decode(generated_tokens)
+                return self.tokenizer.decode(generated_tokens)
 
 

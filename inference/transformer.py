@@ -51,12 +51,15 @@ class TransformerBlock(nn.Module):
 
         self.mlp = SwiGLUMLP(config["hidden_size"] , config["intermediate_size"])
 
-    def forward(self, x):
-        # 1 : Self Attention with Pre-Norm and Residual 
-        x = x + self.self_attn(self.input_layernorm(x))
+    def forward(self,x ,start_pos=0,cache=None):
+
+        normed_x = self.input_layernorm(x)
+        attn_out , updated_cache = self.self_attn(normed_x,start_pos=start_pos,cache=cache)
+        
+        x = x + attn_out
         # 2 MLP with Pre-Norm and Residual 
         x = x + self.mlp(self.post_attention_layernorm(x))
-        return x 
+        return x , updated_cache
 
 
 
@@ -81,18 +84,23 @@ class TinyLlamaModel(nn.Module):
         
         self.embed_tokens = nn.Embedding(config["vocab_size"], config["hidden_size"]) 
 
-    def forward(self,input_ids):
+    def forward(self,input_ids,start_pos = 0,kv_caches = None):
         # Convert token IDS --> Vector [B , T , 2048 ]
         x = self.embed_tokens(input_ids)
 
+        new_kv_caches = []
+
         # Pass through 22 Transformer Blocks 
-        for layer in self.layers:
-            x = layer(x)
+        for i , layer in enumerate(self.layers):
+            layer_cache = kv_caches[i] if kv_caches is not None else None 
+            x , updated_cache = layer(x,start_pos=start_pos,cache=layer_cache)
+            new_kv_caches.append(updated_cache)
+
         
         # Final RMSNORM + Projection to vocab logits [B, T, 32000]
         x = self.norm(x)
         logits = self.lm_head(x)
-        return logits
+        return logits,new_kv_caches
 
 
     def load_weights(self , weights):

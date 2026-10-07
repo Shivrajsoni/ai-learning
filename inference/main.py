@@ -1,5 +1,5 @@
 import json
-from inference.transformer import Inference
+from inference.inference import Inference
 
 
 with open("./tinyllama-weights/config.json", "r") as f:
