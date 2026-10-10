@@ -6,6 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+.DS_Store
+
 # Virtual environments
 .venv
 
@@ -19,3 +21,7 @@ pyproject.toml
 
 #Model 
 tinyllama-weights/
+
+inference-llama/llama-2-7b-chat-hf/
+
+.pytest_cache/
