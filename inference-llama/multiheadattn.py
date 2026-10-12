@@ -9,6 +9,7 @@ def precompute_rope(head_dim ,max_seq_len ,base=10000.0 ,device=None):
     pos = torch.arange(max_seq_len ,device=None).float()
     angle = torch.outer( pos , inv_freq)
     return torch.cos(angle),torch.sin(angle)
+    
 
 def rotate_half(x):
 
